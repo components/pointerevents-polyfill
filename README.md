@@ -5,4 +5,5 @@ Shim repository for [Polymer's Polyfill](http://github.com/Polymer/PointerEvents
 This package provides build versions of the PointerEvents polyfill.
 
 ## Package Managers
-- [Bower](http://bower.io): polymer-pointerevents
+- [Bower](http://bower.io): pointerevents-polyfill
+- [Component](https://github.com/component/component): components/pointerevents-polyfill
