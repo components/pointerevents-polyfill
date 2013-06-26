@@ -586,7 +586,7 @@
     setTouchAction: function(target, touchAction) {
       var st = this.touchActionToScrollType(touchAction);
       if (target.setAttribute) {
-        target[(st ? 'set' : 'remove') + 'Attribute']('touch-action', st);
+        target[(st ? 'set' : 'remove') + 'Attribute']('touch-action', touchAction);
       }
       this.scrollType[st ? 'set' : 'delete'](target, st);
     }
@@ -609,6 +609,7 @@
   var forEach = Array.prototype.forEach.call.bind(Array.prototype.forEach);
   var map = Array.prototype.map.call.bind(Array.prototype.map);
   var toArray = Array.prototype.slice.call.bind(Array.prototype.slice);
+  var filter = Array.prototype.filter.call.bind(Array.prototype.filter);
   var MO = window.MutationObserver || window.WebKitMutationObserver;
   var SELECTOR = '[touch-action]';
   var OBSERVER_INIT = {
@@ -622,7 +623,7 @@
     this.addCallback = add.bind(binder);
     this.removeCallback = remove.bind(binder);
     if (MO) {
-      this.observer = new MO(this.mutationHandler.bind(this));
+      this.observer = new MO(this.mutationWatcher.bind(this));
     }
   }
 
@@ -673,11 +674,14 @@
     installOnLoad: function() {
       document.addEventListener('DOMContentLoaded', this.installNewSubtree.bind(this, document));
     },
+    isElement: function(n) {
+      return n.nodeType === Node.ELEMENT_NODE;
+    },
     flattenMutationTree: function(inNodes) {
       // find children with touch-action
       var tree = map(inNodes, this.findElements, this);
       // make sure the added nodes are accounted for
-      tree.push(inNodes);
+      tree.push(filter(inNodes, this.isElement));
       // flatten the list
       return tree.reduce(this.concatLists, []);
     },
@@ -838,7 +842,7 @@
       }
     },
     elementAdded: function(el) {
-      var a = el.getAttribute && el.getAttribute(this.ATTRIB);
+      var a = el.getAttribute && el.getAttribute(ATTRIB);
       var st = dispatcher.touchActionToScrollType(a);
       if (st) {
         scrollType.set(el, st);
@@ -847,8 +851,9 @@
         if (s) {
           scrollType.set(s, st);
         }
+        // only listen if we have a defined touch-action
+        dispatcher.listen(el, this.events);
       }
-      dispatcher.listen(el, this.events);
     },
     elementRemoved: function(el) {
       scrollType.delete(el);
@@ -1146,7 +1151,6 @@
  */
 (function(scope) {
   var dispatcher = scope.dispatcher;
-  var installer = scope.installer;
 
   // only activate if this platform does not have pointer events
   if (window.navigator.pointerEnabled === undefined) {
