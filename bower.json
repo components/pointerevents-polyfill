@@ -1,6 +1,6 @@
 {
   "name": "pointerevents-polyfill",
-  "version": "0.0.20130626",
+  "version": "0.0.20130711",
   "main": "pointerevents.min.js",
   "ignore": [
     "**/.*",
