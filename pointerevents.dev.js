@@ -25,6 +25,37 @@
 // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+if (typeof WeakMap === 'undefined') {
+  (function() {
+    var defineProperty = Object.defineProperty;
+    var counter = Date.now() % 1e9;
+
+    var WeakMap = function() {
+      this.name = '__st' + (Math.random() * 1e9 >>> 0) + (counter++ + '__');
+    };
+
+    WeakMap.prototype = {
+      set: function(key, value) {
+        var entry = key[this.name];
+        if (entry && entry[0] === key)
+          entry[1] = value;
+        else
+          defineProperty(key, this.name, {value: [key, value], writable: true});
+      },
+      get: function(key) {
+        var entry;
+        return (entry = key[this.name]) && entry[0] === key ?
+            entry[1] : undefined;
+      },
+      delete: function(key) {
+        this.set(key, undefined);
+      }
+    };
+
+    window.WeakMap = WeakMap;
+  })();
+}
+
 (function(scope) {
   scope = scope || {};
   var target = {
@@ -112,7 +143,7 @@
     return '[touch-action="' + v + '"]';
   }
   function rule(v) {
-    return '{ -ms-touch-action: ' + v + '; touch-action: ' + v + '; }';
+    return '{ -ms-touch-action: ' + v + '; touch-action: ' + v + '; touch-action-delay: none; }';
   }
   var attrib2css = [
     'none',
@@ -137,12 +168,7 @@
   });
   var el = document.createElement('style');
   el.textContent = styles;
-  // Use querySelector instead of document.head to ensure that in
-  // ShadowDOM Polyfill that we have a wrapped head to append to.
-  var h = document.querySelector('head');
-  // document.write + document.head.appendChild = crazytown
-  // use insertBefore instead for correctness in ShadowDOM Polyfill
-  h.insertBefore(el, h.firstChild);
+  document.head.appendChild(el);
 })();
 
 /**
@@ -170,8 +196,42 @@
   } catch(e) {
   }
 
+  var MOUSE_PROPS = [
+    'bubbles',
+    'cancelable',
+    'view',
+    'detail',
+    'screenX',
+    'screenY',
+    'clientX',
+    'clientY',
+    'ctrlKey',
+    'altKey',
+    'shiftKey',
+    'metaKey',
+    'button',
+    'relatedTarget',
+  ];
+
+  var MOUSE_DEFAULTS = [
+    false,
+    false,
+    null,
+    null,
+    0,
+    0,
+    0,
+    0,
+    false,
+    false,
+    false,
+    false,
+    0,
+    null
+  ];
+
   function PointerEvent(inType, inDict) {
-    var inDict = inDict || {};
+    inDict = inDict || {};
     // According to the w3c spec,
     // http://www.w3.org/TR/DOM-Level-3-Events/#events-MouseEvent-button
     // MouseEvent.button == 0 can mean either no mouse button depressed, or the
@@ -208,29 +268,13 @@
       e = new MouseEvent(inType, inDict);
     } else {
       e = document.createEvent('MouseEvent');
-      // import values from the given dictionary
-      var props = {
-        bubbles: false,
-        cancelable: false,
-        view: null,
-        detail: null,
-        screenX: 0,
-        screenY: 0,
-        clientX: 0,
-        clientY: 0,
-        ctrlKey: false,
-        altKey: false,
-        shiftKey: false,
-        metaKey: false,
-        button: 0,
-        relatedTarget: null
-      };
 
-      Object.keys(props).forEach(function(k) {
-        if (k in inDict) {
-          props[k] = inDict[k];
-        }
-      });
+      // import values from the given dictionary
+      var props = {}, p;
+      for(var i = 0; i < MOUSE_PROPS.length; i++) {
+        p = MOUSE_PROPS[i];
+        props[p] = inDict[p] || MOUSE_DEFAULTS[i];
+      }
 
       // define the properties inherited from MouseEvent
       e.initMouseEvent(
@@ -244,7 +288,7 @@
     if (!HAS_BUTTONS) {
       // IE 10 has buttons on MouseEvent.prototype as a getter w/o any setting
       // mechanism
-      Object.defineProperty(e, 'buttons', {get: function(){ return buttons }, enumerable: true});
+      Object.defineProperty(e, 'buttons', {get: function(){ return buttons; }, enumerable: true});
     }
 
     // Spec requires that pointers without pressure specified use 0.5 for down
@@ -342,38 +386,76 @@
   }
 })(window.PointerEventsPolyfill);
 
-// SideTable is a weak map where possible. If WeakMap is not available the
-// association is stored as an expando property.
 (function(scope) {
-  var SideTable;
-  // TODO(dfreedman): WeakMap does not allow for Events to be keys in Firefox
-  if (typeof WeakMap !== 'undefined' && navigator.userAgent.indexOf('Firefox/') < 0) {
-    SideTable = WeakMap;
-  } else {
-    var defineProperty = Object.defineProperty;
-    var hasOwnProperty = Object.hasOwnProperty;
-    var counter = new Date().getTime() % 1e9;
+  var CLONE_PROPS = [
+    // MouseEvent
+    'bubbles',
+    'cancelable',
+    'view',
+    'detail',
+    'screenX',
+    'screenY',
+    'clientX',
+    'clientY',
+    'ctrlKey',
+    'altKey',
+    'shiftKey',
+    'metaKey',
+    'button',
+    'relatedTarget',
+    // DOM Level 3
+    'buttons',
+    // PointerEvent
+    'pointerId',
+    'width',
+    'height',
+    'pressure',
+    'tiltX',
+    'tiltY',
+    'pointerType',
+    'hwTimestamp',
+    'isPrimary',
+    // event instance
+    'type',
+    'target',
+    'currentTarget',
+    'which'
+  ];
 
-    SideTable = function() {
-      this.name = '__st' + (Math.random() * 1e9 >>> 0) + (counter++ + '__');
-    };
-
-    SideTable.prototype = {
-      set: function(key, value) {
-        defineProperty(key, this.name, {value: value, writable: true});
-      },
-      get: function(key) {
-        return hasOwnProperty.call(key, this.name) ? key[this.name] : undefined;
-      },
-      delete: function(key) {
-        this.set(key, undefined);
-      }
-    };
-  }
-  scope.SideTable = SideTable;
-})(window.PointerEventsPolyfill);
-
-(function(scope) {
+  var CLONE_DEFAULTS = [
+    // MouseEvent
+    false,
+    false,
+    null,
+    null,
+    0,
+    0,
+    0,
+    0,
+    false,
+    false,
+    false,
+    false,
+    0,
+    null,
+    // DOM Level 3
+    undefined,
+    // PointerEvent
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    '',
+    0,
+    false,
+    // event instance
+    '',
+    null,
+    null,
+    0
+  ];
 
   /**
    * This module is for normalizing events. Mouse and Touch events will be
@@ -388,9 +470,9 @@
    *   - pointercancel: a pointer will no longer generate events
    */
   var dispatcher = {
-    targets: new scope.SideTable,
-    handledEvents: new scope.SideTable,
-    pointermap: new scope.PointerMap,
+    targets: new WeakMap(),
+    handledEvents: new WeakMap(),
+    pointermap: new scope.PointerMap(),
     eventMap: {},
     // Scope objects for native events.
     // This exists for ease of testing.
@@ -433,7 +515,7 @@
     },
     // EVENTS
     down: function(inEvent) {
-      this.fireEvent('pointerdown', inEvent)
+      this.fireEvent('pointerdown', inEvent);
     },
     move: function(inEvent) {
       this.fireEvent('pointermove', inEvent);
@@ -443,7 +525,7 @@
     },
     enter: function(inEvent) {
       inEvent.bubbles = false;
-      this.fireEvent('pointerenter', inEvent)
+      this.fireEvent('pointerenter', inEvent);
     },
     leave: function(inEvent) {
       inEvent.bubbles = false;
@@ -451,7 +533,7 @@
     },
     over: function(inEvent) {
       inEvent.bubbles = true;
-      this.fireEvent('pointerover', inEvent)
+      this.fireEvent('pointerover', inEvent);
     },
     out: function(inEvent) {
       inEvent.bubbles = true;
@@ -532,9 +614,10 @@
      *    properties.
      */
     cloneEvent: function(inEvent) {
-      var eventCopy = {};
-      for (var n in inEvent) {
-        eventCopy[n] = inEvent[n];
+      var eventCopy = {}, p;
+      for (var i = 0; i < CLONE_PROPS.length; i++) {
+        p = CLONE_PROPS[i];
+        eventCopy[p] = inEvent[p] || CLONE_DEFAULTS[i];
       }
       return eventCopy;
     },
@@ -693,7 +776,7 @@
       } else if (m.type === 'attributes') {
         this.elementChanged(m.target, m.oldValue);
       }
-    },
+    }
   };
 
   if (!MO) {
@@ -817,7 +900,7 @@
 
   // handler block for native touch events
   var touchEvents = {
-    scrollType: new scope.SideTable,
+    scrollType: new WeakMap(),
     events: [
       'touchstart',
       'touchmove',
@@ -880,7 +963,7 @@
       EMITTER: 'none',
       XSCROLLER: 'pan-x',
       YSCROLLER: 'pan-y',
-      SCROLLER: /^(?:pan-x pan-y)|(?:pan-y pan-x)|auto$/,
+      SCROLLER: /^(?:pan-x pan-y)|(?:pan-y pan-x)|auto$/
     },
     touchActionToScrollType: function(touchAction) {
       var t = touchAction;
@@ -901,15 +984,16 @@
       return this.firstTouch === inTouch.identifier;
     },
     setPrimaryTouch: function(inTouch) {
-      if (this.firstTouch === null) {
+      // set primary touch if there no pointers, or the only pointer is the mouse
+      if (pointermap.size == 0 || (pointermap.size == 1 && pointermap.has(1))) {
         this.firstTouch = inTouch.identifier;
         this.firstXY = {X: inTouch.clientX, Y: inTouch.clientY};
         this.scrolling = false;
         this.cancelResetClickCount();
       }
     },
-    removePrimaryTouch: function(inTouch) {
-      if (this.isPrimaryTouch(inTouch)) {
+    removePrimaryPointer: function(inPointer) {
+      if (inPointer.isPrimary) {
         this.firstTouch = null;
         this.firstXY = null;
         this.resetClickCount();
@@ -1089,7 +1173,7 @@
     },
     cleanUpPointer: function(inPointer) {
       pointermap.delete(inPointer.pointerId);
-      this.removePrimaryTouch(inPointer);
+      this.removePrimaryPointer(inPointer);
     },
     // prevent synth mouse events from creating pointer events
     dedupSynthMouse: function(inEvent) {
@@ -1103,7 +1187,7 @@
         var fn = (function(lts, lt){
           var i = lts.indexOf(lt);
           if (i > -1) {
-            lts.splice(i, 1)
+            lts.splice(i, 1);
           }
         }).bind(null, lts, lt);
         setTimeout(fn, DEDUP_TIMEOUT);
@@ -1258,10 +1342,10 @@
   if (!Element.prototype.setPointerCapture) {
     Object.defineProperties(Element.prototype, {
       'setPointerCapture': {
-        value: s,
+        value: s
       },
       'releasePointerCapture': {
-        value: r,
+        value: r
       }
     });
   }
