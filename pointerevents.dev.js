@@ -140,6 +140,9 @@ if (typeof WeakMap === 'undefined') {
 })(window.PointerEventsPolyfill);
 
 (function() {
+  function shadowSelector(v) {
+    return 'body ^^ ' + selector(v);
+  }
   function selector(v) {
     return '[touch-action="' + v + '"]';
   }
@@ -162,9 +165,11 @@ if (typeof WeakMap === 'undefined') {
   var styles = '';
   attrib2css.forEach(function(r) {
     if (String(r) === r) {
-      styles += selector(r) + rule(r);
+      styles += selector(r) + rule(r) + '\n';
+      styles += shadowSelector(r) + rule(r) + '\n';
     } else {
-      styles += r.selectors.map(selector) + rule(r.rule);
+      styles += r.selectors.map(selector) + rule(r.rule) + '\n';
+      styles += r.selectors.map(shadowSelector) + rule(r.rule) + '\n';
     }
   });
   var el = document.createElement('style');
@@ -373,9 +378,10 @@ if (typeof WeakMap === 'undefined') {
       this.keys.length = 0;
       this.values.length = 0;
     },
+    // return value, key, map
     forEach: function(callback, thisArg) {
-      this.keys.forEach(function(id, i) {
-        callback.call(thisArg, id, this.values[i], this);
+      this.values.forEach(function(v, i) {
+        callback.call(thisArg, v, this.keys[i], this);
       }, this);
     },
     pointers: function() {
@@ -1113,7 +1119,7 @@ if (typeof WeakMap === 'undefined') {
       // been processed yet.
       if (pointermap.pointers() >= tl.length) {
         var d = [];
-        pointermap.forEach(function(key, value) {
+        pointermap.forEach(function(value, key) {
           // Never remove pointerId == 1, which is mouse.
           // Touch identifiers are 2 smaller than their pointerId, which is the
           // index in pointermap.
