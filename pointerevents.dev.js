@@ -469,6 +469,8 @@ if (typeof WeakMap === 'undefined') {
     0
   ];
 
+  var HAS_SVG_INSTANCE = (typeof SVGElementInstance !== 'undefined');
+
   /**
    * This module is for normalizing events. Mouse and Touch events will be
    * collected here, and fire PointerEvents that have the same semantics, no
@@ -530,12 +532,15 @@ if (typeof WeakMap === 'undefined') {
     },
     // EVENTS
     down: function(inEvent) {
+      inEvent.bubbles = true;
       this.fireEvent('pointerdown', inEvent);
     },
     move: function(inEvent) {
+      inEvent.bubbles = true;
       this.fireEvent('pointermove', inEvent);
     },
     up: function(inEvent) {
+      inEvent.bubbles = true;
       this.fireEvent('pointerup', inEvent);
     },
     enter: function(inEvent) {
@@ -555,19 +560,20 @@ if (typeof WeakMap === 'undefined') {
       this.fireEvent('pointerout', inEvent);
     },
     cancel: function(inEvent) {
+      inEvent.bubbles = true;
       this.fireEvent('pointercancel', inEvent);
     },
     leaveOut: function(event) {
+      this.out(event);
       if (!this.contains(event.target, event.relatedTarget)) {
         this.leave(event);
       }
-      this.out(event);
     },
     enterOver: function(event) {
+      this.over(event);
       if (!this.contains(event.target, event.relatedTarget)) {
         this.enter(event);
       }
-      this.over(event);
     },
     // LISTENER LOGIC
     eventHandler: function(inEvent) {
@@ -640,6 +646,14 @@ if (typeof WeakMap === 'undefined') {
       for (var i = 0; i < CLONE_PROPS.length; i++) {
         p = CLONE_PROPS[i];
         eventCopy[p] = inEvent[p] || CLONE_DEFAULTS[i];
+        // Work around SVGInstanceElement shadow tree
+        // Return the <use> element that is represented by the instance for Safari, Chrome, IE.
+        // This is the behavior implemented by Firefox.
+        if (HAS_SVG_INSTANCE && (p === 'target' || p === 'relatedTarget')) {
+          if (eventCopy[p] instanceof SVGElementInstance) {
+            eventCopy[p] = eventCopy[p].correspondingUseElement;
+          }
+        }
       }
       // keep the semantics of preventDefault
       if (inEvent.preventDefault) {
@@ -1158,6 +1172,7 @@ if (typeof WeakMap === 'undefined') {
         outTarget: inPointer.target
       });
       dispatcher.over(inPointer);
+      dispatcher.enter(inPointer);
       dispatcher.down(inPointer);
     },
     touchmove: function(inEvent) {
@@ -1207,6 +1222,7 @@ if (typeof WeakMap === 'undefined') {
       if (!this.scrolling) {
         dispatcher.up(inPointer);
         dispatcher.out(inPointer);
+        dispatcher.leave(inPointer);
       }
       this.cleanUpPointer(inPointer);
     },
@@ -1216,6 +1232,7 @@ if (typeof WeakMap === 'undefined') {
     cancelOut: function(inPointer) {
       dispatcher.cancel(inPointer);
       dispatcher.out(inPointer);
+      dispatcher.leave(inPointer);
       this.cleanUpPointer(inPointer);
     },
     cleanUpPointer: function(inPointer) {
